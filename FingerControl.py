@@ -68,7 +68,7 @@ class Finger_Control_Listener(Leap.Listener):  #The Listener that we attach to t
         vel = vel * -1  #Negate direction, depending on how you like to scroll
         return vel
 
-    def intersect(self, finger):
+    def intersect(self, finger):    #calculates the point on screen where the finger points
         #from http://paulbourke.net/geometry/pointlineplane/
         p1 = finger.tip_position
         p2 = p1-finger.direction
