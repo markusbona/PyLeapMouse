@@ -89,7 +89,7 @@ def sort_fingers_by_distance_from_screen(fingers):
 
 
 def has_thumb(hand):  #The level of accuracy with this function is surprisingly high
-    if hand.fingers.empty:  #We assume no thumbs
+    if hand.fingers.is_empty:  #We assume no thumbs
         return False
     distances = []
     palm_position = Geometry.to_vector(hand.palm_position)
