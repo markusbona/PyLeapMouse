@@ -12,22 +12,23 @@ class Finger_Control_Listener(Leap.Listener):  #The Listener that we attach to t
     def __init__(self, mouse, smooth_aggressiveness=8, smooth_falloff=1.3):
         super(Finger_Control_Listener, self).__init__()  #Initialize like a normal listener
         #Initialize a bunch of stuff specific to this implementation
+        self.screen_point = Leap.Vector(-0.659, 359.29, -25.886)
         self.screen = None
-        self.screen_resolution = (0,0)
+        self.screen_resolution = (1920,1200)
         self.cursor = mouse.absolute_cursor()  #The cursor object that lets us control mice cross-platform
         self.mouse_position_smoother = mouse_position_smoother(smooth_aggressiveness, smooth_falloff) #Keeps the cursor from fidgeting
         self.mouse_button_debouncer = debouncer(5)  #A signal debouncer that ensures a reliable, non-jumpy click
         self.most_recent_pointer_finger_id = None  #This holds the ID of the most recently used pointing finger, to prevent annoying switching
 
-    def on_init(self, controller):
-        if controller.located_screens.is_empty:
-            print "Calibrate your Leap screen feature"
-        else:
-            print "Found a screen..."
-            self.screen = controller.located_screens[0]
-            self.screen_resolution = (self.screen.width_pixels, self.screen.height_pixels)
-
-        print "Initialized"
+#    def on_init(self, controller):
+#         if controller.located_screens.is_empty:
+#             print "Calibrate your Leap screen feature"
+#         else:
+#             print "Found a screen..."
+#             self.screen = controller.located_screens[0]
+#             self.screen_resolution = (self.screen.width_pixels, self.screen.height_pixels)
+# 
+#         print "Initialized"
 
     def on_connect(self, controller):
         print "Connected"
@@ -67,27 +68,42 @@ class Finger_Control_Listener(Leap.Listener):  #The Listener that we attach to t
         vel = vel * -1  #Negate direction, depending on how you like to scroll
         return vel
 
+    def intersect(self, finger):
+        #from http://paulbourke.net/geometry/pointlineplane/
+        p1 = finger.tip_position
+        p2 = p1-finger.direction
+        p3 = self.screen_point
+        n = Leap.Vector(0,0,1)
+        u = n.dot(p3-p2) / n.dot(p2-p1)
+        p = p1 + (p2-p1) * u
+        # normalize
+        p = Leap.Vector(p.x+244, p.y-80, p.z)
+        p = Leap.Vector(p.x/504, p.y/330, p.z)
+        return p
+
     def do_mouse_stuff(self, hand):  #Take a hand and use it as a mouse
         fingers = hand.fingers  #The list of fingers on said hand
         if not fingers.is_empty:  #Make sure we have some fingers to work with
             pointer_finger = self.select_pointer_finger(fingers)  #Determine which finger to use
             
-            try:
-                intersection = self.screen.intersect(pointer_finger, True)  #Where the finger projection intersects with the screen
-                if not math.isnan(intersection.x) and not math.isnan(intersection.y):  #If the finger intersects with the screen
-                    x_coord = intersection.x * self.screen_resolution[0]  #x pixel of intersection
-                    y_coord = (1.0 - intersection.y) * self.screen_resolution[1]  #y pixel of intersection
-                    x_coord,y_coord = self.mouse_position_smoother.update((x_coord,y_coord)) #Smooth movement
-                    self.cursor.move(x_coord,y_coord)  #Move the cursor
-                    if has_thumb(hand):  #We've found a thumb!
-                        self.mouse_button_debouncer.signal(True)  #We have detected a possible click. The debouncer ensures that we don't have click jitter
-                    else:
-                        self.mouse_button_debouncer.signal(False)  #Same idea as above (but opposite)
+#             try:
+                #intersection = self.screen.intersect(pointer_finger, True)  #Where the finger projection intersects with the screen
+            intersection = self.intersect(pointer_finger)
+            if not math.isnan(intersection.x) and not math.isnan(intersection.y):  #If the finger intersects with the screen
+                x_coord = intersection.x * self.screen_resolution[0]  #x pixel of intersection
+                y_coord = (1.0 - intersection.y) * self.screen_resolution[1]  #y pixel of intersection
+                #print "(%d,%d)" % (x_coord, y_coord)
+                x_coord,y_coord = self.mouse_position_smoother.update((x_coord,y_coord)) #Smooth movement
+                self.cursor.move(x_coord,y_coord)  #Move the cursor
+                if has_thumb(hand):  #We've found a thumb!
+                    self.mouse_button_debouncer.signal(True)  #We have detected a possible click. The debouncer ensures that we don't have click jitter
+                else:
+                    self.mouse_button_debouncer.signal(False)  #Same idea as above (but opposite)
 
-                    if self.cursor.left_button_pressed != self.mouse_button_debouncer.state:  #We need to push/unpush the cursor's button
-                        self.cursor.set_left_button_pressed(self.mouse_button_debouncer.state)  #Set the cursor to click/not click
-            except Exception as e:
-                print e
+                if self.cursor.left_button_pressed != self.mouse_button_debouncer.state:  #We need to push/unpush the cursor's button
+                    self.cursor.set_left_button_pressed(self.mouse_button_debouncer.state)  #Set the cursor to click/not click
+#             except Exception as e:
+#                 print e
 
     def select_pointer_finger(self, possible_fingers):  #Choose the best pointer finger
         sorted_fingers = sort_fingers_by_distance_from_screen(possible_fingers)  #Prioritize fingers by distance from screen
